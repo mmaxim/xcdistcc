@@ -17,11 +17,9 @@ type compileJob struct {
 }
 
 func newCompileJob(id jobID, cmd common.CompileCmd, sourceAddr string) *compileJob {
-	xccmd := common.NewXcodeCmd(cmd.Command)
-	xccmd.SetArch(cmd.Arch)
 	return &compileJob{
 		id:         id,
-		cmd:        xccmd,
+		cmd:        common.NewXcodeCmd(cmd.Command),
 		code:       cmd.Code,
 		sourceAddr: sourceAddr,
 		doneCh:     make(chan common.CompileResponse),
@@ -35,7 +33,6 @@ func (j *compileJob) toStatusJob() common.StatusJob {
 	}
 	return common.StatusJob{
 		SourceAddress: j.sourceAddr,
-		Arch:          j.cmd.GetArch(),
 		Filename:      filename,
 		Command:       j.cmd.GetCommand(),
 	}

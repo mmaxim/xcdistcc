@@ -31,7 +31,7 @@ func (c *XcodeCmd) getSwitchWithArg(name string) (string, error) {
 			return c.toks[index+1], nil
 		}
 	}
-	return "", errors.New("no input filename given")
+	return "", errors.New("no switch found")
 }
 
 func (c *XcodeCmd) addSwitchWithArg(name, arg string) {
@@ -46,7 +46,7 @@ func (c *XcodeCmd) removeSwitch(name string, hasArg bool) {
 			if hasArg {
 				stride = 2
 			}
-			c.toks = append(c.toks[:index-1], c.toks[index+stride:]...)
+			c.toks = append(c.toks[:index], c.toks[index+stride:]...)
 			return
 		}
 	}

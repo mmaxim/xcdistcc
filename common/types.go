@@ -17,7 +17,6 @@ const MethodCompile = "compile"
 
 type CompileCmd struct {
 	Command string
-	Arch    string
 	Code    string
 }
 
@@ -32,7 +31,6 @@ type StatusCmd struct{}
 
 type StatusJob struct {
 	SourceAddress string
-	Arch          string
 	Filename      string
 	Command       string
 }
