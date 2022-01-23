@@ -1,9 +1,8 @@
 package server
 
 import (
-	"bufio"
-	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net"
@@ -88,7 +87,7 @@ func (r *Listener) sendResponse(payload interface{}, err error, conn net.Conn) {
 		r.Debug("sendResponse: failed to marshal response: %s", err)
 		return
 	}
-	if _, err := io.Copy(conn, bytes.NewBuffer(append(dat, common.NewLineBytes...))); err != nil {
+	if err := common.RPCSendRaw(conn, dat); err != nil {
 		r.Debug("sendResponse: failed to send response: %s", err)
 		return
 	}
@@ -113,15 +112,20 @@ func (r *Listener) handleCommand(cmd common.Cmd, conn net.Conn) {
 
 func (r *Listener) serve(conn net.Conn) {
 	defer conn.Close()
-	scanner := bufio.NewScanner(conn)
-	for scanner.Scan() {
+	for {
+		dat, err := common.RPCRecvRaw(conn)
+		if err != nil {
+			if errors.Unwrap(err) == io.EOF {
+				r.Debug("serve: failed to recv: %s", err)
+			}
+			return
+		}
+		r.Debug("raw: %s", string(dat[:100]))
 		var cmd common.Cmd
-		if err := json.Unmarshal([]byte(scanner.Text()), &cmd); err != nil {
+		if err := json.Unmarshal(dat, &cmd); err != nil {
 			r.Debug("serve: invalid JSON: %s", err)
+			continue
 		}
 		r.handleCommand(cmd, conn)
-	}
-	if err := scanner.Err(); err != nil {
-		r.Debug("serve: failed to scan: %s", err)
 	}
 }

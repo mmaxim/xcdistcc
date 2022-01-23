@@ -8,12 +8,17 @@ import (
 
 type jobID uint64
 
+type compileJobRes struct {
+	res common.CompileResponse
+	err error
+}
+
 type compileJob struct {
 	id         jobID
 	cmd        *common.XcodeCmd
 	code       string
 	sourceAddr string
-	doneCh     chan common.CompileResponse
+	doneCh     chan compileJobRes
 }
 
 func newCompileJob(id jobID, cmd common.CompileCmd, sourceAddr string) *compileJob {
@@ -22,7 +27,7 @@ func newCompileJob(id jobID, cmd common.CompileCmd, sourceAddr string) *compileJ
 		cmd:        common.NewXcodeCmd(cmd.Command),
 		code:       cmd.Code,
 		sourceAddr: sourceAddr,
-		doneCh:     make(chan common.CompileResponse),
+		doneCh:     make(chan compileJobRes),
 	}
 }
 
@@ -70,6 +75,15 @@ func (r *Runner) compileWorkerLoop() {
 			continue
 		}
 		r.Debug("compiling job: %s", job.cmd.GetCommand())
+		builder := NewBuilder(job.code, job.cmd)
+		res, err := builder.Run()
+		if err != nil {
+			r.Debug("compile failed: %s", err)
+		}
+		job.doneCh <- compileJobRes{
+			res: res,
+			err: err,
+		}
 		r.finishCompileJob(job)
 	}
 }
@@ -96,7 +110,8 @@ func (r *Runner) Compile(cmd common.CompileCmd, sourceAddr string) (res common.C
 	if err != nil {
 		return res, err
 	}
-	return <-job.doneCh, nil
+	doneRes := <-job.doneCh
+	return doneRes.res, doneRes.err
 }
 
 func (r *Runner) Status() (res common.StatusResponse) {

@@ -77,7 +77,6 @@ func (d *Dispatcher) Run(cmdstr string) error {
 		}); err != nil {
 		d.Debug("failed to make RPC: %s", err)
 	}
-	d.Debug(cmdresp.Output)
 	if err := os.WriteFile(outputPath, cmdresp.Object, 0644); err != nil {
 		d.Debug("failed to write output file: %s", err)
 		return err
