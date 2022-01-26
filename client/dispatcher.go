@@ -42,6 +42,7 @@ func (d *Dispatcher) preprocess(basecmd *common.XcodeCmd) (string, error) {
 	cmd := exec.Command(common.DefaultCXX, precmd.GetTokens()...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
+		d.Debug("preprocess failed: %s", string(out[:]))
 		return "", errors.Wrap(err, "preprocess failed")
 	}
 	return string(out[:]), nil

@@ -1,10 +1,11 @@
 package common
 
 import (
-	"errors"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 type XcodeCmd struct {
@@ -19,7 +20,8 @@ func NewXcodeCmd(cmd string) *XcodeCmd {
 
 func (c *XcodeCmd) Clone() *XcodeCmd {
 	ret := new(XcodeCmd)
-	*ret = *c
+	ret.toks = make([]string, len(c.toks))
+	copy(ret.toks, c.toks)
 	return ret
 }
 
@@ -61,7 +63,7 @@ func (c *XcodeCmd) removeSwitch(name string, hasArg bool) {
 func (c *XcodeCmd) GetInputFilename() (string, error) {
 	arg, err := c.getSwitchWithArg("-c")
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err, "no input filename switch")
 	}
 	return filepath.Base(arg), nil
 }
@@ -69,7 +71,15 @@ func (c *XcodeCmd) GetInputFilename() (string, error) {
 func (c *XcodeCmd) GetOutputFilename() (string, error) {
 	arg, err := c.getSwitchWithArg("-o")
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err, "no output filename switch")
+	}
+	return filepath.Base(arg), nil
+}
+
+func (c *XcodeCmd) GetDepFilename() (string, error) {
+	arg, err := c.getSwitchWithArg("-MF")
+	if err != nil {
+		return "", errors.Wrap(err, "no dep filename switch")
 	}
 	return filepath.Base(arg), nil
 }
@@ -84,8 +94,21 @@ func (c *XcodeCmd) SetOutputFilename(filename string) {
 	c.addSwitchWithArg("-o", filename)
 }
 
+func (c *XcodeCmd) SetDepFilename(filename string) {
+	c.removeSwitch("-MF", true)
+	c.addSwitchWithArg("-MF", filename)
+}
+
 func (c *XcodeCmd) RemoveOutputFilename() {
 	c.removeSwitch("-o", true)
+}
+
+func (c *XcodeCmd) RemoveInputFilename() {
+	c.removeSwitch("-c", true)
+}
+
+func (c *XcodeCmd) RemoveDepFilename() {
+	c.removeSwitch("-MF", true)
 }
 
 func (c *XcodeCmd) SetPreprocessorOnly() {
@@ -93,6 +116,10 @@ func (c *XcodeCmd) SetPreprocessorOnly() {
 }
 
 func (c *XcodeCmd) SetArch(arch string) {
+	switch arch {
+	case "amd64":
+		arch = "x86_64"
+	}
 	c.removeSwitch("-arch", true)
 	c.addSwitchWithArg("-arch", arch)
 }

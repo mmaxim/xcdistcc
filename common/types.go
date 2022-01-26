@@ -22,7 +22,8 @@ type CompileCmd struct {
 
 type CompileResponse struct {
 	Output string
-	Object []byte // blank if there is a compile error
+	Object []byte
+	Dep    []byte
 }
 
 const MethodStatus = "status"

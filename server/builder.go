@@ -53,18 +53,40 @@ func (b *Builder) Run() (res common.CompileResponse, err error) {
 		return res, errors.Wrap(err, "failed to make temp dir")
 	}
 	defer os.RemoveAll(dir)
+	ccmd := b.cmd.Clone()
 
 	// write out temp input file with same name
-	inputFilename, err := b.cmd.GetInputFilename()
+	inputPath, err := b.cmd.GetInputFilename()
 	if err != nil {
 		return res, err
 	}
+	inputFilename := filepath.Base(inputPath)
 	if err := os.WriteFile(filepath.Join(dir, inputFilename), []byte(b.code), 0644); err != nil {
 		return res, errors.Wrap(err, "failed to write input file")
 	}
+	ccmd.RemoveInputFilename()
+	ccmd.SetInputFilename(inputFilename)
 
-	ccmd := b.cmd.Clone()
+	outputPath, err := b.cmd.GetOutputFilename()
+	if err != nil {
+		return res, err
+	}
+	outputFilename := filepath.Base(outputPath)
+	ccmd.RemoveOutputFilename()
+	ccmd.SetOutputFilename(outputFilename)
+
+	var depFilename string
+	depPath, err := b.cmd.GetDepFilename()
+	if err != nil {
+		b.Debug("no depfile, skipping creating it")
+	} else {
+		depFilename = filepath.Base(depPath)
+		ccmd.RemoveDepFilename()
+		ccmd.SetDepFilename(depFilename)
+	}
+
 	ccmd.StripCompiler()
+	b.Debug("compile command: %s", ccmd.GetCommand())
 	ecmd := exec.Command(common.DefaultCXX, ccmd.GetTokens()...)
 	ecmd.Dir = dir
 	out, err := ecmd.CombinedOutput()
@@ -74,15 +96,18 @@ func (b *Builder) Run() (res common.CompileResponse, err error) {
 	}
 
 	// read output file
-	outputFilename, err := b.cmd.GetOutputFilename()
-	if err != nil {
-		return res, err
-	}
 	object, err := os.ReadFile(filepath.Join(dir, outputFilename))
 	if err != nil {
 		return res, errors.Wrap(err, "failed to read object file")
 	}
-
+	// read dep file if requested
+	if len(depFilename) != 0 {
+		dep, err := os.ReadFile(filepath.Join(dir, depFilename))
+		if err != nil {
+			return res, errors.Wrap(err, "failed to read dep file")
+		}
+		res.Dep = dep
+	}
 	res.Output = string(out)
 	res.Object = object
 	return res, nil
