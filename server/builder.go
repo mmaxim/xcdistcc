@@ -9,6 +9,28 @@ import (
 	"mmaxim.org/xcdistcc/common"
 )
 
+type compileError struct {
+	msg    string
+	output string
+}
+
+func newCompileError(msg, output string) compileError {
+	return compileError{
+		msg:    msg,
+		output: output,
+	}
+}
+
+func (e compileError) Msg() string {
+	return e.msg
+}
+
+func (e compileError) Error() string {
+	return e.output
+}
+
+// =============================================================================
+
 type Builder struct {
 	*common.LabelLogger
 
@@ -41,16 +63,14 @@ func (b *Builder) Run() (res common.CompileResponse, err error) {
 		return res, errors.Wrap(err, "failed to write input file")
 	}
 
-	ccmd := new(common.XcodeCmd)
-	*ccmd = *b.cmd
+	ccmd := b.cmd.Clone()
 	ccmd.StripCompiler()
-	b.Debug("%v", ccmd.GetTokens())
 	ecmd := exec.Command(common.DefaultCXX, ccmd.GetTokens()...)
 	ecmd.Dir = dir
 	out, err := ecmd.CombinedOutput()
 	if err != nil {
 		b.Debug("failed to run command: out: %s err: %s", out, err)
-		return res, errors.Wrap(err, "failed to run compile command")
+		return res, newCompileError(err.Error(), string(out[:]))
 	}
 
 	// read output file

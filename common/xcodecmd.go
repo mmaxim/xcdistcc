@@ -17,6 +17,12 @@ func NewXcodeCmd(cmd string) *XcodeCmd {
 	}
 }
 
+func (c *XcodeCmd) Clone() *XcodeCmd {
+	ret := new(XcodeCmd)
+	*ret = *c
+	return ret
+}
+
 func (c *XcodeCmd) GetCommand() string {
 	return strings.Join(c.toks, " ")
 }

@@ -34,13 +34,11 @@ func (d *Dispatcher) getConn() (net.Conn, error) {
 }
 
 func (d *Dispatcher) preprocess(basecmd *common.XcodeCmd) (string, error) {
-	precmd := new(common.XcodeCmd)
-	*precmd = *basecmd
+	precmd := basecmd.Clone()
 	precmd.StripCompiler()
 	precmd.SetPreprocessorOnly()
 	precmd.RemoveOutputFilename()
 
-	d.Debug(precmd.GetCommand())
 	cmd := exec.Command(common.DefaultCXX, precmd.GetTokens()...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -75,7 +73,8 @@ func (d *Dispatcher) Run(cmdstr string) error {
 			Command: xccmd.GetCommand(),
 			Code:    preprocessed,
 		}); err != nil {
-		d.Debug("failed to make RPC: %s", err)
+		fmt.Fprintf(os.Stderr, err.Error())
+		return err
 	}
 	if err := os.WriteFile(outputPath, cmdresp.Object, 0644); err != nil {
 		d.Debug("failed to write output file: %s", err)
