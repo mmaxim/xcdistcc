@@ -32,7 +32,7 @@ func newCompileJob(id jobID, cmd common.CompileCmd, sourceAddr string) *compileJ
 }
 
 func (j *compileJob) toStatusJob() common.StatusJob {
-	filename, err := j.cmd.GetInputFilename()
+	filename, err := j.cmd.GetInputFilepath()
 	if err != nil {
 		filename = "???"
 	}

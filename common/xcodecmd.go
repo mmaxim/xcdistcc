@@ -1,7 +1,6 @@
 package common
 
 import (
-	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -60,54 +59,54 @@ func (c *XcodeCmd) removeSwitch(name string, hasArg bool) {
 	}
 }
 
-func (c *XcodeCmd) GetInputFilename() (string, error) {
+func (c *XcodeCmd) GetInputFilepath() (string, error) {
 	arg, err := c.getSwitchWithArg("-c")
 	if err != nil {
-		return "", errors.Wrap(err, "no input filename switch")
+		return "", errors.Wrap(err, "no input filepath option")
 	}
-	return filepath.Base(arg), nil
+	return arg, nil
 }
 
-func (c *XcodeCmd) GetOutputFilename() (string, error) {
+func (c *XcodeCmd) GetOutputFilepath() (string, error) {
 	arg, err := c.getSwitchWithArg("-o")
 	if err != nil {
-		return "", errors.Wrap(err, "no output filename switch")
+		return "", errors.Wrap(err, "no output filepath option")
 	}
-	return filepath.Base(arg), nil
+	return arg, nil
 }
 
-func (c *XcodeCmd) GetDepFilename() (string, error) {
+func (c *XcodeCmd) GetDepFilepath() (string, error) {
 	arg, err := c.getSwitchWithArg("-MF")
 	if err != nil {
-		return "", errors.Wrap(err, "no dep filename switch")
+		return "", errors.Wrap(err, "no dep filepath option")
 	}
-	return filepath.Base(arg), nil
+	return arg, nil
 }
 
-func (c *XcodeCmd) SetInputFilename(filename string) {
+func (c *XcodeCmd) SetInputFilepath(filepath string) {
 	c.removeSwitch("-c", true)
-	c.addSwitchWithArg("-c", filename)
+	c.addSwitchWithArg("-c", filepath)
 }
 
-func (c *XcodeCmd) SetOutputFilename(filename string) {
+func (c *XcodeCmd) SetOutputFilepath(filepath string) {
 	c.removeSwitch("-o", true)
-	c.addSwitchWithArg("-o", filename)
+	c.addSwitchWithArg("-o", filepath)
 }
 
-func (c *XcodeCmd) SetDepFilename(filename string) {
+func (c *XcodeCmd) SetDepFilepath(filepath string) {
 	c.removeSwitch("-MF", true)
-	c.addSwitchWithArg("-MF", filename)
+	c.addSwitchWithArg("-MF", filepath)
 }
 
-func (c *XcodeCmd) RemoveOutputFilename() {
+func (c *XcodeCmd) RemoveOutputFilepath() {
 	c.removeSwitch("-o", true)
 }
 
-func (c *XcodeCmd) RemoveInputFilename() {
+func (c *XcodeCmd) RemoveInputFilepath() {
 	c.removeSwitch("-c", true)
 }
 
-func (c *XcodeCmd) RemoveDepFilename() {
+func (c *XcodeCmd) RemoveDepFilepath() {
 	c.removeSwitch("-MF", true)
 }
 

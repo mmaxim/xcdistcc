@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -37,7 +38,7 @@ func (d *Dispatcher) preprocess(basecmd *common.XcodeCmd) (string, error) {
 	precmd := basecmd.Clone()
 	precmd.StripCompiler()
 	precmd.SetPreprocessorOnly()
-	precmd.RemoveOutputFilename()
+	precmd.RemoveOutputFilepath()
 
 	cmd := exec.Command(common.DefaultCXX, precmd.GetTokens()...)
 	out, err := cmd.CombinedOutput()
@@ -48,15 +49,26 @@ func (d *Dispatcher) preprocess(basecmd *common.XcodeCmd) (string, error) {
 	return string(out[:]), nil
 }
 
+func (d *Dispatcher) writeFile(fullpath string, dat []byte) error {
+	if err := os.MkdirAll(filepath.Dir(fullpath), 0644); err != nil {
+		return errors.Wrap(err, "failed to make directory")
+	}
+	if err := os.WriteFile(fullpath, dat, 0644); err != nil {
+		return errors.Wrap(err, "failed to write file")
+	}
+	return nil
+}
+
 func (d *Dispatcher) Run(cmdstr string) error {
 	xccmd := common.NewXcodeCmd(cmdstr)
 	xccmd.SetArch(runtime.GOARCH)
 
-	outputPath, err := xccmd.GetOutputFilename()
+	outputPath, err := xccmd.GetOutputFilepath()
 	if err != nil {
 		d.Debug("failed to get output path: %s", err)
 		return err
 	}
+	d.Debug("output path: %s", outputPath)
 	preprocessed, err := d.preprocess(xccmd)
 	if err != nil {
 		d.Debug("failed to preprocess: %s", err)
@@ -74,10 +86,20 @@ func (d *Dispatcher) Run(cmdstr string) error {
 			Command: xccmd.GetCommand(),
 			Code:    preprocessed,
 		}); err != nil {
-		fmt.Fprintf(os.Stderr, err.Error())
+		fmt.Fprint(os.Stderr, err.Error())
 		return err
 	}
-	if err := os.WriteFile(outputPath, cmdresp.Object, 0644); err != nil {
+
+	// write dep file if one was specified
+	depPath, err := xccmd.GetDepFilepath()
+	if err == nil {
+		if err := d.writeFile(depPath, cmdresp.Dep); err != nil {
+			d.Debug("failed to write dep file: %s", err)
+			return err
+		}
+	}
+	// ensure output path exists
+	if err := d.writeFile(outputPath, cmdresp.Object); err != nil {
 		d.Debug("failed to write output file: %s", err)
 		return err
 	}

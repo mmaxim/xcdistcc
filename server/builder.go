@@ -56,7 +56,7 @@ func (b *Builder) Run() (res common.CompileResponse, err error) {
 	ccmd := b.cmd.Clone()
 
 	// write out temp input file with same name
-	inputPath, err := b.cmd.GetInputFilename()
+	inputPath, err := b.cmd.GetInputFilepath()
 	if err != nil {
 		return res, err
 	}
@@ -64,25 +64,25 @@ func (b *Builder) Run() (res common.CompileResponse, err error) {
 	if err := os.WriteFile(filepath.Join(dir, inputFilename), []byte(b.code), 0644); err != nil {
 		return res, errors.Wrap(err, "failed to write input file")
 	}
-	ccmd.RemoveInputFilename()
-	ccmd.SetInputFilename(inputFilename)
+	ccmd.RemoveInputFilepath()
+	ccmd.SetInputFilepath(inputFilename)
 
-	outputPath, err := b.cmd.GetOutputFilename()
+	outputPath, err := b.cmd.GetOutputFilepath()
 	if err != nil {
 		return res, err
 	}
 	outputFilename := filepath.Base(outputPath)
-	ccmd.RemoveOutputFilename()
-	ccmd.SetOutputFilename(outputFilename)
+	ccmd.RemoveOutputFilepath()
+	ccmd.SetOutputFilepath(outputFilename)
 
 	var depFilename string
-	depPath, err := b.cmd.GetDepFilename()
+	depPath, err := b.cmd.GetDepFilepath()
 	if err != nil {
 		b.Debug("no depfile, skipping creating it")
 	} else {
 		depFilename = filepath.Base(depPath)
-		ccmd.RemoveDepFilename()
-		ccmd.SetDepFilename(depFilename)
+		ccmd.RemoveDepFilepath()
+		ccmd.SetDepFilepath(depFilename)
 	}
 
 	ccmd.StripCompiler()
