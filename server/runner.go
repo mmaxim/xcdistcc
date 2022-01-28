@@ -52,19 +52,20 @@ type Runner struct {
 	activeJobs   map[jobID]*compileJob
 }
 
-func NewRunner(numWorkers, maxQueueSize int) *Runner {
+func NewRunner(numWorkers, maxQueueSize int, logger common.Logger) *Runner {
 	r := &Runner{
-		LabelLogger: common.NewLabelLogger("Runner"),
+		LabelLogger: common.NewLabelLogger("Runner", logger),
 		queue:       newJobQueue[*compileJob](maxQueueSize),
 		activeJobs:  make(map[jobID]*compileJob),
 	}
+	r.Debug("spawning %d workers", numWorkers)
 	for i := 0; i < numWorkers; i++ {
-		go r.compileWorkerLoop()
+		go r.compileWorkerLoop(i)
 	}
 	return r
 }
 
-func (r *Runner) compileWorkerLoop() {
+func (r *Runner) compileWorkerLoop(id int) {
 	for {
 		<-r.queue.wait()
 		job, err := r.queue.takeJob()
@@ -74,8 +75,13 @@ func (r *Runner) compileWorkerLoop() {
 			}
 			continue
 		}
-		r.Debug("compiling job: %s", job.cmd.GetCommand())
-		builder := NewBuilder(job.code, job.cmd)
+		inputpath, err := job.cmd.GetInputFilepath()
+		if err != nil {
+			inputpath = "???"
+		}
+		r.Debug("compiling job: worker: %d input: %s sz: %d queue: %d", id, inputpath,
+			len(job.code), len(r.queue.listJobs()))
+		builder := NewBuilder(job.code, job.cmd, r.GetLogger())
 		res, err := builder.Run()
 		if err != nil {
 			r.Debug("compile failed: %s", err)

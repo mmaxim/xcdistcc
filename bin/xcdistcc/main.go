@@ -28,7 +28,8 @@ func main() {
 		os.Exit(3)
 	}
 
-	dispatcher := client.NewDispatcher(config.Remotes)
+	dispatcher := client.NewDispatcher(client.NewStatusHostSelector(config.Remotes, config.Logger),
+		config.Logger)
 	if err := dispatcher.Run(strings.Join(os.Args[1:], " ")); err != nil {
 		os.Exit(3)
 	}

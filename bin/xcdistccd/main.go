@@ -58,8 +58,10 @@ func getOptional(val, def string) string {
 
 func main() {
 	opts := config()
-	runner := server.NewRunner(opts.MaxWorkers, opts.MaxQueueSize)
-	listener := server.NewListener(runner, getOptional(opts.Address, common.DefaultListenAddress))
+	logger := common.NewStdLogger()
+	runner := server.NewRunner(opts.MaxWorkers, opts.MaxQueueSize, logger)
+	listener := server.NewListener(runner, getOptional(opts.Address, common.DefaultListenAddress),
+		logger)
 	if err := listener.Run(); err != nil {
 		log.Fatalf("error running listener: %s", err)
 	}

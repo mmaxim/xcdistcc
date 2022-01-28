@@ -21,9 +21,9 @@ type Listener struct {
 	shutdownCh chan struct{}
 }
 
-func NewListener(runner *Runner, address string) *Listener {
+func NewListener(runner *Runner, address string, logger common.Logger) *Listener {
 	return &Listener{
-		LabelLogger: common.NewLabelLogger("Listener"),
+		LabelLogger: common.NewLabelLogger("Listener", logger),
 		runner:      runner,
 		address:     address,
 		shutdownCh:  make(chan struct{}),
@@ -37,6 +37,7 @@ func (r *Listener) Run() (err error) {
 		return err
 	}
 	defer r.listener.Close()
+	r.Debug("listening on: %s", r.address)
 	for {
 		connCh := make(chan net.Conn)
 		errCh := make(chan error)
@@ -120,7 +121,6 @@ func (r *Listener) serve(conn net.Conn) {
 			}
 			return
 		}
-		r.Debug("raw: %s", string(dat[:100]))
 		var cmd common.Cmd
 		if err := json.Unmarshal(dat, &cmd); err != nil {
 			r.Debug("serve: invalid JSON: %s", err)

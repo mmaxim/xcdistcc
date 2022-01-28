@@ -2,3 +2,6 @@
 test.cc
 test.o
 a.out
+samples/test.o.d
+samples/test.o
+bin/xcdistcc/xcdistcc
