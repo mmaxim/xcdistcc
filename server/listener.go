@@ -68,7 +68,7 @@ func (r *Listener) signalHandler() {
 	close(r.shutdownCh)
 }
 
-func (r *Listener) sendResponse(payload interface{}, err error, conn net.Conn) {
+func (r *Listener) sendResponse(payload interface{}, err error, conn net.Conn) error {
 	var response common.CmdResponse
 	if err != nil {
 		response.Success = false
@@ -79,35 +79,37 @@ func (r *Listener) sendResponse(payload interface{}, err error, conn net.Conn) {
 		dat, err := msgpack.Marshal(payload)
 		if err != nil {
 			r.Debug("sendResponse: failed to marshal payload: %s", err)
-			return
+			return err
 		}
 		response.Payload = dat
 	}
 	dat, err := msgpack.Marshal(response)
 	if err != nil {
 		r.Debug("sendResponse: failed to marshal response: %s", err)
-		return
+		return err
 	}
 	if err := common.RPCSendRaw(conn, dat); err != nil {
 		r.Debug("sendResponse: failed to send response: %s", err)
-		return
+		return err
 	}
+	return nil
 }
 
-func (r *Listener) handleCommand(cmd common.Cmd, conn net.Conn) {
+func (r *Listener) handleCommand(cmd common.Cmd, conn net.Conn) error {
 	switch cmd.Name {
 	case common.MethodCompile:
 		var compile common.CompileCmd
 		if err := msgpack.Unmarshal(cmd.Args, &compile); err != nil {
 			r.Debug("handleCommand: failed to parse compile args: %s", err)
-			return
+			return err
 		}
 		payload, err := r.runner.Compile(compile, "")
-		r.sendResponse(payload, err, conn)
+		return r.sendResponse(payload, err, conn)
 	case common.MethodStatus:
-		r.sendResponse(r.runner.Status(), nil, conn)
+		return r.sendResponse(r.runner.Status(), nil, conn)
 	default:
 		r.Debug("handleCommand: unknown command: %s", cmd.Name)
+		return errors.New("unknown command")
 	}
 }
 
@@ -124,8 +126,11 @@ func (r *Listener) serve(conn net.Conn) {
 		var cmd common.Cmd
 		if err := msgpack.Unmarshal(dat, &cmd); err != nil {
 			r.Debug("serve: invalid msgpack: %s", err)
-			continue
+			return
 		}
-		r.handleCommand(cmd, conn)
+		if err := r.handleCommand(cmd, conn); err != nil {
+			r.Debug("serve: failed to handle command: %s", err)
+			return
+		}
 	}
 }

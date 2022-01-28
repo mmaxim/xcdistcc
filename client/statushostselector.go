@@ -49,6 +49,7 @@ func (s *StatusHostSelector) GetHost() (string, error) {
 		eg.Go(func() error {
 			status, err := s.getHostStatus(host)
 			if err != nil {
+				s.Debug("GetHost: failed to get status: %s", err)
 				return err
 			}
 			queueSizesMu.Lock()

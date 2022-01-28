@@ -105,6 +105,7 @@ func (d *Dispatcher) Run(cmdstr string) error {
 			Command: xccmd.GetCommand(),
 			Code:    preprocessed,
 		}); err != nil {
+		d.Debug("failed to compile")
 		fmt.Fprint(os.Stderr, err.Error())
 		return err
 	}
