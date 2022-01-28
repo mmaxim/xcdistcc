@@ -1,23 +1,23 @@
 package common
 
-import "encoding/json"
+import "github.com/vmihailenco/msgpack/v5"
 
 type Cmd struct {
 	Name string
-	Args json.RawMessage
+	Args msgpack.RawMessage
 }
 
 type CmdResponse struct {
 	Success  bool
 	ErrorMsg *string
-	Payload  json.RawMessage
+	Payload  msgpack.RawMessage
 }
 
 const MethodCompile = "compile"
 
 type CompileCmd struct {
 	Command string
-	Code    string
+	Code    []byte
 }
 
 type CompileResponse struct {

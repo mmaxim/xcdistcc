@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -10,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/vmihailenco/msgpack/v5"
 	"mmaxim.org/xcdistcc/common"
 )
 
@@ -76,14 +76,14 @@ func (r *Listener) sendResponse(payload interface{}, err error, conn net.Conn) {
 		*response.ErrorMsg = err.Error()
 	} else {
 		response.Success = true
-		dat, err := json.Marshal(payload)
+		dat, err := msgpack.Marshal(payload)
 		if err != nil {
 			r.Debug("sendResponse: failed to marshal payload: %s", err)
 			return
 		}
 		response.Payload = dat
 	}
-	dat, err := json.Marshal(response)
+	dat, err := msgpack.Marshal(response)
 	if err != nil {
 		r.Debug("sendResponse: failed to marshal response: %s", err)
 		return
@@ -98,7 +98,7 @@ func (r *Listener) handleCommand(cmd common.Cmd, conn net.Conn) {
 	switch cmd.Name {
 	case common.MethodCompile:
 		var compile common.CompileCmd
-		if err := json.Unmarshal(cmd.Args, &compile); err != nil {
+		if err := msgpack.Unmarshal(cmd.Args, &compile); err != nil {
 			r.Debug("handleCommand: failed to parse compile args: %s", err)
 			return
 		}
@@ -122,8 +122,8 @@ func (r *Listener) serve(conn net.Conn) {
 			return
 		}
 		var cmd common.Cmd
-		if err := json.Unmarshal(dat, &cmd); err != nil {
-			r.Debug("serve: invalid JSON: %s", err)
+		if err := msgpack.Unmarshal(dat, &cmd); err != nil {
+			r.Debug("serve: invalid msgpack: %s", err)
 			continue
 		}
 		r.handleCommand(cmd, conn)

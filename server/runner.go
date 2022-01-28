@@ -16,7 +16,7 @@ type compileJobRes struct {
 type compileJob struct {
 	id         jobID
 	cmd        *common.XcodeCmd
-	code       string
+	code       []byte
 	sourceAddr string
 	doneCh     chan compileJobRes
 }
@@ -86,6 +86,7 @@ func (r *Runner) compileWorkerLoop(id int) {
 		if err != nil {
 			r.Debug("compile failed: %s", err)
 		}
+		r.Debug("compiling complete: input: %s sz: %d", inputpath, len(res.Object))
 		job.doneCh <- compileJobRes{
 			res: res,
 			err: err,

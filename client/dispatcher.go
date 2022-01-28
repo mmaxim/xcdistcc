@@ -3,7 +3,6 @@ package client
 import (
 	"bytes"
 	"compress/gzip"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"net"
@@ -104,7 +103,7 @@ func (d *Dispatcher) Run(cmdstr string) error {
 	if cmdresp, err = common.DoRPC[common.CompileCmd, common.CompileResponse](conn, common.MethodCompile,
 		common.CompileCmd{
 			Command: xccmd.GetCommand(),
-			Code:    base64.StdEncoding.EncodeToString(preprocessed),
+			Code:    preprocessed,
 		}); err != nil {
 		fmt.Fprint(os.Stderr, err.Error())
 		return err
@@ -120,7 +119,6 @@ func (d *Dispatcher) Run(cmdstr string) error {
 			return err
 		}
 	}
-	// ensure output path exists
 	if err := d.writeFile(outputPath, cmdresp.Object); err != nil {
 		d.Debug("failed to write output file: %s", err)
 		return err
