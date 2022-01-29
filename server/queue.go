@@ -39,6 +39,10 @@ func (q *jobQueue[T]) wait() chan struct{} {
 	q.Lock()
 	defer q.Unlock()
 	ch := make(chan struct{})
+	if len(q.queue) > 0 {
+		close(ch)
+		return ch
+	}
 	q.waiters = append(q.waiters, ch)
 	return ch
 }

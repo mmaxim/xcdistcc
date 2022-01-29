@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/vmihailenco/msgpack/v5"
@@ -24,14 +25,25 @@ func RPCSendRaw(conn net.Conn, raw []byte) error {
 	dat := gzipBuf.Bytes()
 	var sz uint32
 	sz = uint32(len(dat))
-	if err := binary.Write(conn, binary.BigEndian, sz); err != nil {
-		return errors.Wrap(err, "failed to write len")
+	errCh := make(chan error, 1)
+	go func() {
+		if err := binary.Write(conn, binary.BigEndian, sz); err != nil {
+			errCh <- errors.Wrap(err, "failed to write len")
+			return
+		}
+		buf := bytes.NewBuffer(dat)
+		if _, err := io.CopyN(conn, buf, int64(sz)); err != nil {
+			errCh <- errors.Wrap(err, "failed to write msg")
+			return
+		}
+		errCh <- nil
+	}()
+	select {
+	case err := <-errCh:
+		return err
+	case <-time.After(time.Minute):
+		return errors.New("rpc send timeout")
 	}
-	buf := bytes.NewBuffer(dat)
-	if _, err := io.Copy(conn, buf); err != nil {
-		return errors.Wrap(err, "failed to write msg")
-	}
-	return nil
 }
 
 func RPCRecvRaw(conn net.Conn) (res []byte, err error) {
@@ -40,8 +52,21 @@ func RPCRecvRaw(conn net.Conn) (res []byte, err error) {
 		return res, errors.Wrap(err, "failed to read response size")
 	}
 	resp := make([]byte, sz)
-	if _, err := io.ReadFull(conn, resp); err != nil {
-		return res, errors.Wrap(err, "failed to read response")
+	errCh := make(chan error, 1)
+	go func() {
+		if _, err := io.ReadFull(conn, resp); err != nil {
+			errCh <- errors.Wrap(err, "failed to read response")
+			return
+		}
+		errCh <- nil
+	}()
+	select {
+	case err := <-errCh:
+		if err != nil {
+			return res, err
+		}
+	case <-time.After(time.Minute):
+		return res, errors.New("rpc recv timeout")
 	}
 
 	decompressor, err := gzip.NewReader(bytes.NewBuffer(resp))
@@ -68,9 +93,22 @@ func DoRPC[ReqTyp any, PayloadTyp any](conn net.Conn, method string, req ReqTyp)
 	if err := RPCSendRaw(conn, dat); err != nil {
 		return res, err
 	}
-	resp, err := RPCRecvRaw(conn)
-	if err != nil {
+	respCh := make(chan []byte, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		resp, err := RPCRecvRaw(conn)
+		if err != nil {
+			errCh <- err
+		}
+		respCh <- resp
+	}()
+	var resp []byte
+	select {
+	case resp = <-respCh:
+	case err := <-errCh:
 		return res, err
+	case <-time.After(time.Minute):
+		return res, errors.New("timed out waiting for response")
 	}
 
 	// parse response
