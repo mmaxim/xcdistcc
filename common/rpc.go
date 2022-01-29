@@ -31,8 +31,7 @@ func RPCSendRaw(conn net.Conn, raw []byte) error {
 			errCh <- errors.Wrap(err, "failed to write len")
 			return
 		}
-		buf := bytes.NewBuffer(dat)
-		if _, err := io.CopyN(conn, buf, int64(sz)); err != nil {
+		if _, err := io.CopyN(conn, bytes.NewBuffer(dat), int64(sz)); err != nil {
 			errCh <- errors.Wrap(err, "failed to write msg")
 			return
 		}
