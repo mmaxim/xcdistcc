@@ -1,6 +1,7 @@
 package common
 
 import (
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -133,4 +134,25 @@ func (c *XcodeCmd) GetArch() string {
 
 func (c *XcodeCmd) StripCompiler() {
 	c.toks = c.toks[1:]
+}
+
+func (c *XcodeCmd) IncludeDirs() (res []string) {
+	for index, tok := range c.toks {
+		var relpath string
+		if (tok == "-I" || tok == "-isystem") && index < len(c.toks)-1 {
+			relpath = c.toks[index+1]
+		} else if strings.HasPrefix(tok, "-I") {
+			relpath = tok[2:]
+		} else if strings.HasPrefix(tok, "-isystem") {
+			relpath = tok[8:]
+		} else {
+			continue
+		}
+		dir, err := filepath.Abs(relpath)
+		if err != nil {
+			continue
+		}
+		res = append(res, dir)
+	}
+	return res
 }

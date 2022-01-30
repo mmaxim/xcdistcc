@@ -29,7 +29,7 @@ func main() {
 	}
 
 	dispatcher := client.NewDispatcher(client.NewStatusHostSelector(config.Remotes, config.Logger),
-		config.Logger)
+		client.NewClangPreprocessor(config.Logger), config.Logger)
 	if err := dispatcher.Run(strings.Join(os.Args[1:], " ")); err != nil {
 		os.Exit(3)
 	}
