@@ -1,9 +1,6 @@
 package server
 
 import (
-	"bytes"
-	"compress/gzip"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -38,37 +35,22 @@ func (e compileError) Error() string {
 type Builder struct {
 	*common.LabelLogger
 
-	code []byte
-	cmd  *common.XcodeCmd
+	code     []byte
+	cmd      *common.XcodeCmd
+	includes []common.IncludeData
 }
 
-func NewBuilder(code []byte, cmd *common.XcodeCmd, logger common.Logger) *Builder {
+func NewBuilder(code []byte, cmd *common.XcodeCmd, includes []common.IncludeData,
+	logger common.Logger) *Builder {
 	return &Builder{
 		LabelLogger: common.NewLabelLogger("Builder", logger),
 		code:        code,
 		cmd:         cmd,
+		includes:    includes,
 	}
-}
-
-func (b *Builder) decodeCode() (string, error) {
-	gzipReader, err := gzip.NewReader(bytes.NewBuffer(b.code))
-	if err != nil {
-		return "", errors.Wrap(err, "failed to make gzip reader")
-	}
-	defer gzipReader.Close()
-	code, err := io.ReadAll(gzipReader)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to decompress")
-	}
-	return string(code[:]), nil
 }
 
 func (b *Builder) Run() (res common.CompileResponse, err error) {
-	code, err := b.decodeCode()
-	if err != nil {
-		return res, err
-	}
-
 	owndir, err := common.RandString("xc", 9)
 	if err != nil {
 		return res, errors.Wrap(err, "failed to generate build dir name")
@@ -87,7 +69,7 @@ func (b *Builder) Run() (res common.CompileResponse, err error) {
 		return res, err
 	}
 	inputFilepath := filepath.Join(dir, filepath.Base(origInputPath))
-	if err := os.WriteFile(inputFilepath, []byte(code), 0644); err != nil {
+	if err := os.WriteFile(inputFilepath, b.code, 0644); err != nil {
 		return res, errors.Wrap(err, "failed to write input file")
 	}
 	ccmd.RemoveInputFilepath()
@@ -107,6 +89,23 @@ func (b *Builder) Run() (res common.CompileResponse, err error) {
 		depFilepath = filepath.Join(dir, filepath.Base(origDepPath))
 		ccmd.RemoveDepFilepath()
 		ccmd.SetDepFilepath(depFilepath)
+	}
+
+	// if we have include data, create the localized version of it in the temp dir, and change the
+	// compile commands be rooted in it
+	if len(b.includes) != 0 {
+		for _, include := range b.includes {
+			dest := dir + include.Path
+			if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+				b.Debug("failed to make include dirs: dest: %s err: %s", dest, err)
+				continue
+			}
+			if err := os.WriteFile(dest, []byte(include.Data), 0644); err != nil {
+				b.Debug("failed to write include: dest: %s err: %s", dest, err)
+				continue
+			}
+		}
+		ccmd.LocalizeIncludeDirs(dir)
 	}
 
 	ccmd.StripCompiler()
