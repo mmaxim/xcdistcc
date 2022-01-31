@@ -187,3 +187,7 @@ func (c *XcodeCmd) LocalizeIncludeDirs(basedir string) {
 		}
 	})
 }
+
+func (c *XcodeCmd) AddIncludeDir(path string) {
+	c.addSwitchWithArg("-I", path)
+}
