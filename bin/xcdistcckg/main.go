@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	priv, public, err := box.GenerateKey(rand.Reader)
+	public, priv, err := box.GenerateKey(rand.Reader)
 	if err != nil {
 		log.Printf("failed to generate key: %s", err)
 		os.Exit(3)

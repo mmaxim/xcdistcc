@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"net"
 
@@ -61,31 +62,31 @@ func NewPublicKeyFromString(strPublic string) (res PublicKey, err error) {
 		return res, errors.Wrap(err, "unable to parse public key")
 	}
 	if len(publicSlice) != 32 {
-		return res, errors.New("invalid public key")
+		return res, fmt.Errorf("invalid public key: len: %d", len(publicSlice))
 	}
 	copy(res[:], publicSlice)
 	return res, nil
 }
 
 type KeyPair struct {
-	Private PrivateKey
 	Public  PublicKey
+	Private PrivateKey
 }
 
-func NewKeyPair(private PrivateKey, public PublicKey) *KeyPair {
+func NewKeyPair(public PublicKey, private PrivateKey) *KeyPair {
 	return &KeyPair{
-		Private: private,
 		Public:  public,
+		Private: private,
 	}
 }
 
-func NewKeyPairFromString(strPrivate, strPublic string) (res *KeyPair, err error) {
+func NewKeyPairFromString(strPublic, strPrivate string) (res *KeyPair, err error) {
 	res = new(KeyPair)
-	if res.Private, err = NewPrivateKeyFromString(strPrivate); err != nil {
-		return nil, errors.Wrap(err, "unable to parse private key")
-	}
 	if res.Public, err = NewPublicKeyFromString(strPublic); err != nil {
 		return nil, errors.Wrap(err, "unable to parse public key")
+	}
+	if res.Private, err = NewPrivateKeyFromString(strPrivate); err != nil {
+		return nil, errors.Wrap(err, "unable to parse private key")
 	}
 	return res, nil
 }
@@ -104,6 +105,10 @@ func (s SharedSecret) RawPtr() *[32]byte {
 	return (*[32]byte)(&s)
 }
 
+func (s SharedSecret) String() string {
+	return hex.EncodeToString(s[:])
+}
+
 func DialEncrypted(address string, remotePublicKey PublicKey) (net.Conn, *SharedSecret, error) {
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
@@ -116,7 +121,8 @@ func DialEncrypted(address string, remotePublicKey PublicKey) (net.Conn, *Shared
 	if _, err := io.Copy(conn, bytes.NewBuffer(public[:])); err != nil {
 		return nil, nil, err
 	}
-	var secret SharedSecret
-	box.Precompute(secret.RawPtr(), remotePublicKey.RawPtr(), private)
+	var out [32]byte
+	box.Precompute(&out, remotePublicKey.RawPtr(), private)
+	secret := NewSharedSecret(out)
 	return conn, &secret, nil
 }

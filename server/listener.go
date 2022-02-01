@@ -120,13 +120,14 @@ func (r *Listener) handleCommand(cmd common.Cmd, conn net.Conn, secret *common.S
 }
 
 func (r *Listener) handshake(conn net.Conn) (res *common.SharedSecret, err error) {
-	var pk common.PublicKey
-	if _, err := io.ReadFull(conn, pk.Slice()); err != nil {
+	var out [32]byte
+	if _, err := io.ReadFull(conn, out[:]); err != nil {
 		return nil, err
 	}
-	res = new(common.SharedSecret)
-	box.Precompute(res.RawPtr(), pk.RawPtr(), r.keyPair.Public.RawPtr())
-	return res, nil
+	pk := common.NewPublicKey(out)
+	box.Precompute(&out, pk.RawPtr(), r.keyPair.Private.RawPtr())
+	secret := common.NewSharedSecret(out)
+	return &secret, nil
 }
 
 func (r *Listener) serve(conn net.Conn) {

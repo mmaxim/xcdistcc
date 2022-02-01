@@ -45,7 +45,7 @@ func configKeypair() (*common.KeyPair, error) {
 	if len(privateStr) == 0 {
 		return nil, errors.New("must supply private key with public key")
 	}
-	return common.NewKeyPairFromString(privateStr, publicStr)
+	return common.NewKeyPairFromString(publicStr, privateStr)
 }
 
 func config() (opts Options) {
