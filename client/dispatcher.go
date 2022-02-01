@@ -3,7 +3,6 @@ package client
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"time"
@@ -45,21 +44,6 @@ func (d *Dispatcher) getConn() (*RemoteConn, error) {
 		return nil, err
 	}
 	return DialRemote(remote)
-}
-
-func (d *Dispatcher) preprocess(basecmd *common.XcodeCmd) ([]byte, error) {
-	precmd := basecmd.Clone()
-	precmd.StripCompiler()
-	precmd.SetPreprocessorOnly()
-	precmd.RemoveOutputFilepath()
-
-	cmd := exec.Command(common.DefaultCXX, precmd.GetTokens()...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		d.Debug("preprocess failed: %s", string(out[:]))
-		return nil, errors.Wrap(err, "preprocess failed")
-	}
-	return out, nil
 }
 
 func (d *Dispatcher) writeFile(fullpath string, dat []byte) error {
