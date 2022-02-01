@@ -2,7 +2,6 @@ package client
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,8 +12,13 @@ import (
 	"mmaxim.org/xcdistcc/common"
 )
 
-type HostSelector interface {
-	GetHost() (string, error)
+type Remote struct {
+	Address      string
+	PublicKeyStr string
+}
+
+type RemoteSelector interface {
+	GetRemote() (Remote, error)
 }
 
 type Preprocessor interface {
@@ -23,24 +27,24 @@ type Preprocessor interface {
 
 type Dispatcher struct {
 	*common.LabelLogger
-	hostSelector HostSelector
-	preprocessor Preprocessor
+	remoteSelector RemoteSelector
+	preprocessor   Preprocessor
 }
 
-func NewDispatcher(hostSelector HostSelector, preprocessor Preprocessor, logger common.Logger) *Dispatcher {
+func NewDispatcher(remoteSelector RemoteSelector, preprocessor Preprocessor, logger common.Logger) *Dispatcher {
 	return &Dispatcher{
-		LabelLogger:  common.NewLabelLogger("Dispatcher", logger),
-		hostSelector: hostSelector,
-		preprocessor: preprocessor,
+		LabelLogger:    common.NewLabelLogger("Dispatcher", logger),
+		remoteSelector: remoteSelector,
+		preprocessor:   preprocessor,
 	}
 }
 
-func (d *Dispatcher) getConn() (net.Conn, error) {
-	host, err := d.hostSelector.GetHost()
+func (d *Dispatcher) getConn() (*RemoteConn, error) {
+	remote, err := d.remoteSelector.GetRemote()
 	if err != nil {
 		return nil, err
 	}
-	return net.Dial("tcp", host)
+	return DialRemote(remote)
 }
 
 func (d *Dispatcher) preprocess(basecmd *common.XcodeCmd) ([]byte, error) {
@@ -95,12 +99,12 @@ func (d *Dispatcher) Run(cmdstr string) error {
 	}
 	stageTime = time.Now()
 	var cmdresp common.CompileResponse
-	if cmdresp, err = common.DoRPC[common.CompileCmd, common.CompileResponse](conn, common.MethodCompile,
+	if cmdresp, err = common.DoRPC[common.CompileCmd, common.CompileResponse](conn.Conn, common.MethodCompile,
 		common.CompileCmd{
 			Command:  xccmd.GetCommand(),
 			Code:     preprocessed,
 			Includes: includeData,
-		}); err != nil {
+		}, conn.Secret); err != nil {
 		d.Debug("failed to compile")
 		fmt.Fprint(os.Stderr, err.Error())
 		return err

@@ -1,5 +1,8 @@
 {
     "remotes": [
-        "127.0.0.1"
+        {
+            "address": "127.0.0.1",
+            "publickeystr": "0969a7910796ba9cd9ceabf513e29d209d3ef4a05c90db2703bb9e1eb80b9d6a"
+        }
     ]
 }

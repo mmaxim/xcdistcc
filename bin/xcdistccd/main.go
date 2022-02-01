@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"log"
 	"os"
@@ -15,6 +16,7 @@ type Options struct {
 	MaxWorkers   int
 	MaxQueueSize int
 	CxxPath      string
+	KeyPair      *common.KeyPair
 }
 
 func (o Options) check() {}
@@ -34,6 +36,18 @@ func envIntValue(name string, def int) (ret int) {
 	return ret
 }
 
+func configKeypair() (*common.KeyPair, error) {
+	publicStr := os.Getenv("XCDISTCCD_PUBLICKEY")
+	if len(publicStr) == 0 {
+		return nil, nil
+	}
+	privateStr := os.Getenv("XCDISTCCD_PRIVATEKEY")
+	if len(privateStr) == 0 {
+		return nil, errors.New("must supply private key with public key")
+	}
+	return common.NewKeyPairFromString(privateStr, publicStr)
+}
+
 func config() (opts Options) {
 
 	flag.StringVar(&opts.Address, "address", os.Getenv("XCDISTCCD_ADDRESS"),
@@ -46,6 +60,13 @@ func config() (opts Options) {
 		"(optional) xcode c++ compiler path (XCDISTCCD_CXXPATH env)")
 	flag.Parse()
 	opts.check()
+
+	var err error
+	opts.KeyPair, err = configKeypair()
+	if err != nil {
+		log.Printf("unable to configure key pair: %s", err)
+		os.Exit(3)
+	}
 	return opts
 }
 
@@ -61,7 +82,7 @@ func main() {
 	logger := common.NewStdLogger()
 	runner := server.NewRunner(opts.MaxWorkers, opts.MaxQueueSize, logger)
 	listener := server.NewListener(runner, getOptional(opts.Address, common.DefaultListenAddress),
-		logger)
+		opts.KeyPair, logger)
 	if err := listener.Run(); err != nil {
 		log.Fatalf("error running listener: %s", err)
 	}

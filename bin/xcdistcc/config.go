@@ -12,7 +12,7 @@ import (
 )
 
 type Config struct {
-	Remotes      []string
+	Remotes      []client.Remote
 	Logger       common.Logger
 	Preprocessor client.Preprocessor
 }
@@ -28,11 +28,11 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, errors.Wrap(err, "failed to parse config")
 	}
 
-	// add default port to hosts missing it
-	for index, host := range config.Remotes {
-		if !strings.Contains(host, ":") {
-			host = fmt.Sprintf("%s:%d", host, common.DefaultListenPort)
-			config.Remotes[index] = host
+	// add default port to remotes missing it
+	for index, remote := range config.Remotes {
+		if !strings.Contains(remote.Address, ":") {
+			remote.Address = fmt.Sprintf("%s:%d", remote.Address, common.DefaultListenPort)
+			config.Remotes[index] = remote
 		}
 	}
 

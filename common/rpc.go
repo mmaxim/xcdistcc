@@ -3,6 +3,7 @@ package common
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/rand"
 	"encoding/binary"
 	"io"
 	"net"
@@ -10,9 +11,17 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/vmihailenco/msgpack/v5"
+	"golang.org/x/crypto/nacl/box"
 )
 
-func RPCSendRaw(conn net.Conn, raw []byte) error {
+func makeNonce() (res [24]byte, err error) {
+	if _, err := io.ReadFull(rand.Reader, res[:]); err != nil {
+		return res, err
+	}
+	return res, nil
+}
+
+func RPCSendRaw(conn net.Conn, raw []byte, secret *SharedSecret) error {
 	var gzipBuf bytes.Buffer
 	compressor := gzip.NewWriter(&gzipBuf)
 	if _, err := io.Copy(compressor, bytes.NewBuffer(raw)); err != nil {
@@ -21,12 +30,25 @@ func RPCSendRaw(conn net.Conn, raw []byte) error {
 	if err := compressor.Close(); err != nil {
 		return errors.Wrap(err, "failed to close compress")
 	}
-
 	dat := gzipBuf.Bytes()
+	var nonce [24]byte
+	if secret != nil {
+		var err error
+		if nonce, err = makeNonce(); err != nil {
+			return errors.Wrap(err, "failed to make nonce")
+		}
+		dat = box.SealAfterPrecomputation(nil, dat, &nonce, secret.RawPtr())
+	}
+
 	var sz uint32
 	sz = uint32(len(dat))
 	errCh := make(chan error, 1)
 	go func() {
+		if secret != nil {
+			if _, err := io.Copy(conn, bytes.NewBuffer(nonce[:])); err != nil {
+				errCh <- errors.Wrap(err, "failed to write nonce")
+			}
+		}
 		if err := binary.Write(conn, binary.BigEndian, sz); err != nil {
 			errCh <- errors.Wrap(err, "failed to write len")
 			return
@@ -45,7 +67,13 @@ func RPCSendRaw(conn net.Conn, raw []byte) error {
 	}
 }
 
-func RPCRecvRaw(conn net.Conn) (res []byte, err error) {
+func RPCRecvRaw(conn net.Conn, secret *SharedSecret) (res []byte, err error) {
+	var nonce [24]byte
+	if secret != nil {
+		if _, err := io.ReadFull(conn, nonce[:]); err != nil {
+			return res, errors.Wrap(err, "failed to read nonce")
+		}
+	}
 	var sz uint32
 	if err := binary.Read(conn, binary.BigEndian, &sz); err != nil {
 		return res, errors.Wrap(err, "failed to read response size")
@@ -67,6 +95,12 @@ func RPCRecvRaw(conn net.Conn) (res []byte, err error) {
 	case <-time.After(time.Minute):
 		return res, errors.New("rpc recv timeout")
 	}
+	if secret != nil {
+		var ok bool
+		if resp, ok = box.OpenAfterPrecomputation(nil, resp, &nonce, secret.RawPtr()); !ok {
+			return res, errors.New("decrypt failed")
+		}
+	}
 
 	decompressor, err := gzip.NewReader(bytes.NewBuffer(resp))
 	if err != nil {
@@ -75,7 +109,7 @@ func RPCRecvRaw(conn net.Conn) (res []byte, err error) {
 	return io.ReadAll(decompressor)
 }
 
-func DoRPC[ReqTyp any, PayloadTyp any](conn net.Conn, method string, req ReqTyp) (res PayloadTyp, err error) {
+func DoRPC[ReqTyp any, PayloadTyp any](conn net.Conn, method string, req ReqTyp, secret *SharedSecret) (res PayloadTyp, err error) {
 	cmdreq := Cmd{
 		Name: method,
 	}
@@ -89,13 +123,13 @@ func DoRPC[ReqTyp any, PayloadTyp any](conn net.Conn, method string, req ReqTyp)
 	}
 
 	// send/recv
-	if err := RPCSendRaw(conn, dat); err != nil {
+	if err := RPCSendRaw(conn, dat, secret); err != nil {
 		return res, err
 	}
 	respCh := make(chan []byte, 1)
 	errCh := make(chan error, 1)
 	go func() {
-		resp, err := RPCRecvRaw(conn)
+		resp, err := RPCRecvRaw(conn, secret)
 		if err != nil {
 			errCh <- err
 		}
