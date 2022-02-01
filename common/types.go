@@ -16,8 +16,9 @@ type CmdResponse struct {
 const MethodCompile = "compile"
 
 type CompileCmd struct {
-	Command string
-	Code    []byte
+	Command  string
+	Code     []byte
+	Includes []IncludeData
 }
 
 type CompileResponse struct {
@@ -39,4 +40,9 @@ type StatusJob struct {
 type StatusResponse struct {
 	ActiveJobs []StatusJob
 	QueuedJobs []StatusJob
+}
+
+type IncludeData struct {
+	Path string
+	Data string
 }

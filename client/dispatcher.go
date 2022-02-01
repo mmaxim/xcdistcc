@@ -1,10 +1,7 @@
 package client
 
 import (
-	"bytes"
-	"compress/gzip"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -20,15 +17,21 @@ type HostSelector interface {
 	GetHost() (string, error)
 }
 
+type Preprocessor interface {
+	Preprocess(cmd *common.XcodeCmd) ([]byte, *common.XcodeCmd, []common.IncludeData, error)
+}
+
 type Dispatcher struct {
 	*common.LabelLogger
 	hostSelector HostSelector
+	preprocessor Preprocessor
 }
 
-func NewDispatcher(hostSelector HostSelector, logger common.Logger) *Dispatcher {
+func NewDispatcher(hostSelector HostSelector, preprocessor Preprocessor, logger common.Logger) *Dispatcher {
 	return &Dispatcher{
 		LabelLogger:  common.NewLabelLogger("Dispatcher", logger),
 		hostSelector: hostSelector,
+		preprocessor: preprocessor,
 	}
 }
 
@@ -52,15 +55,7 @@ func (d *Dispatcher) preprocess(basecmd *common.XcodeCmd) ([]byte, error) {
 		d.Debug("preprocess failed: %s", string(out[:]))
 		return nil, errors.Wrap(err, "preprocess failed")
 	}
-	var gzipBuf bytes.Buffer
-	compressor := gzip.NewWriter(&gzipBuf)
-	if _, err := io.Copy(compressor, bytes.NewBuffer(out)); err != nil {
-		return nil, errors.Wrap(err, "failed to compress")
-	}
-	if err := compressor.Close(); err != nil {
-		return nil, errors.Wrap(err, "failed to close compressor")
-	}
-	return gzipBuf.Bytes(), nil
+	return out, nil
 }
 
 func (d *Dispatcher) writeFile(fullpath string, dat []byte) error {
@@ -84,12 +79,12 @@ func (d *Dispatcher) Run(cmdstr string) error {
 	}
 	startTime := time.Now()
 	stageTime := time.Now()
-	preprocessed, err := d.preprocess(xccmd)
+	preprocessed, precmd, includeData, err := d.preprocessor.Preprocess(xccmd)
 	if err != nil {
 		d.Debug("failed to preprocess: %s", err)
 		return err
 	}
-	xccmd.RemoveDepFilepath()
+	xccmd = precmd
 	d.Debug("preprocessing done: %s sz: %d sdur: %v tdur: %v", outputPath, len(preprocessed),
 		time.Since(stageTime), time.Since(startTime))
 
@@ -102,8 +97,9 @@ func (d *Dispatcher) Run(cmdstr string) error {
 	var cmdresp common.CompileResponse
 	if cmdresp, err = common.DoRPC[common.CompileCmd, common.CompileResponse](conn, common.MethodCompile,
 		common.CompileCmd{
-			Command: xccmd.GetCommand(),
-			Code:    preprocessed,
+			Command:  xccmd.GetCommand(),
+			Code:     preprocessed,
+			Includes: includeData,
 		}); err != nil {
 		d.Debug("failed to compile")
 		fmt.Fprint(os.Stderr, err.Error())

@@ -1,6 +1,7 @@
 package common
 
 import (
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -133,4 +134,60 @@ func (c *XcodeCmd) GetArch() string {
 
 func (c *XcodeCmd) StripCompiler() {
 	c.toks = c.toks[1:]
+}
+
+func (c *XcodeCmd) walkIncludeDirs(walkFunc func(includeTyp string, tokIndex, numToks int)) {
+	for index, tok := range c.toks {
+		if (tok == "-I" || tok == "-isystem") && index < len(c.toks)-1 {
+			walkFunc(tok, index, 2)
+		} else if strings.HasPrefix(tok, "-I") {
+			walkFunc("-I", index, 1)
+		} else if strings.HasPrefix(tok, "-isystem") {
+			walkFunc("-isystem", index, 1)
+		} else {
+			continue
+		}
+	}
+}
+
+func (c *XcodeCmd) IncludeDirs() (res []string) {
+	c.walkIncludeDirs(func(includeTyp string, tokIndex, numToks int) {
+		var relpath string
+		if numToks == 2 {
+			relpath = c.toks[tokIndex+1]
+		} else if numToks == 1 {
+			relpath = c.toks[tokIndex][len(includeTyp):]
+		} else {
+			return
+		}
+		dir, err := filepath.Abs(relpath)
+		if err != nil {
+			return
+		}
+		res = append(res, dir)
+	})
+	return res
+}
+
+func (c *XcodeCmd) LocalizeIncludeDirs(basedir string) {
+	c.walkIncludeDirs(func(includeTyp string, tokIndex, numToks int) {
+		if numToks == 2 {
+			abspath, err := filepath.Abs(c.toks[tokIndex+1])
+			if err != nil {
+				return
+			}
+			c.toks[tokIndex+1] = basedir + abspath
+		} else if numToks == 1 {
+			relpath := c.toks[tokIndex][len(includeTyp):]
+			abspath, err := filepath.Abs(relpath)
+			if err != nil {
+				return
+			}
+			c.toks[tokIndex] = includeTyp + basedir + abspath
+		}
+	})
+}
+
+func (c *XcodeCmd) AddIncludeDir(path string) {
+	c.addSwitchWithArg("-I", path)
 }

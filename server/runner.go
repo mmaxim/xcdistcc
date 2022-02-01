@@ -17,6 +17,7 @@ type compileJob struct {
 	id         jobID
 	cmd        *common.XcodeCmd
 	code       []byte
+	includes   []common.IncludeData
 	sourceAddr string
 	doneCh     chan compileJobRes
 }
@@ -26,6 +27,7 @@ func newCompileJob(id jobID, cmd common.CompileCmd, sourceAddr string) *compileJ
 		id:         id,
 		cmd:        common.NewXcodeCmd(cmd.Command),
 		code:       cmd.Code,
+		includes:   cmd.Includes,
 		sourceAddr: sourceAddr,
 		doneCh:     make(chan compileJobRes),
 	}
@@ -81,7 +83,7 @@ func (r *Runner) compileWorkerLoop(id int) {
 		}
 		r.Debug("compiling job: worker: %d input: %s sz: %d queue: %d", id, inputpath,
 			len(job.code), len(r.queue.listJobs()))
-		builder := NewBuilder(job.code, job.cmd, r.GetLogger())
+		builder := NewBuilder(job.code, job.cmd, job.includes, r.GetLogger())
 		res, err := builder.Run()
 		if err != nil {
 			r.Debug("compile failed: %s", err)

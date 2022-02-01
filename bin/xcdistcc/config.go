@@ -7,12 +7,14 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"mmaxim.org/xcdistcc/client"
 	"mmaxim.org/xcdistcc/common"
 )
 
 type Config struct {
-	Remotes []string
-	Logger  common.Logger
+	Remotes      []string
+	Logger       common.Logger
+	Preprocessor client.Preprocessor
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -49,5 +51,13 @@ func LoadConfig(path string) (*Config, error) {
 	} else {
 		config.Logger = common.NewQuietLogger()
 	}
+	preprocessorStr := os.Getenv("XCDISTCC_PREPROCESSOR")
+	switch preprocessorStr {
+	case "includefinder":
+		config.Preprocessor = client.NewIncludeFinder(config.Logger)
+	default:
+		config.Preprocessor = client.NewClangPreprocessor(config.Logger)
+	}
+
 	return &config, nil
 }
