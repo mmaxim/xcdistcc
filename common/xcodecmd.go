@@ -133,7 +133,10 @@ func (c *XcodeCmd) GetArch() string {
 }
 
 func (c *XcodeCmd) StripCompiler() {
-	c.toks = c.toks[1:]
+	if strings.Contains(c.toks[0], "Xcode") || strings.Contains(c.toks[0], "bin/clang") ||
+		strings.Contains(c.toks[0], "bin/c++") {
+		c.toks = c.toks[1:]
+	}
 }
 
 func (c *XcodeCmd) walkIncludeDirs(walkFunc func(includeTyp string, tokIndex, numToks int)) {

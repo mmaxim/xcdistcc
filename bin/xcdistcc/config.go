@@ -103,13 +103,13 @@ func LoadConfig(path string) (config *Config, err error) {
 	switch preprocessorStr {
 	case "includefinder":
 		config.Preprocessor = client.NewIncludeFinder(config.Logger)
-	case "local":
-		config.Preprocessor = client.NewClangPreprocessor(config.Logger)
 	case "remote":
-		fallthrough
-	default:
 		config.Preprocessor = client.NewRemotePreprocessor(config.RemoteSelector,
 			client.NewClangPreprocessor(config.Logger), config.Logger)
+	case "local":
+		fallthrough
+	default:
+		config.Preprocessor = client.NewClangPreprocessor(config.Logger)
 	}
 
 	return config, nil
