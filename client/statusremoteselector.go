@@ -1,6 +1,7 @@
 package client
 
 import (
+	"errors"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -9,13 +10,21 @@ import (
 
 type StatusRemoteSelector struct {
 	*common.LabelLogger
-	remotes []Remote
+	remotes             []Remote
+	preprocessorRemotes []Remote
 }
 
-func NewStatusHostSelector(remotes []Remote, logger common.Logger) *StatusRemoteSelector {
+func NewStatusRemoteSelector(remotes []Remote, logger common.Logger) *StatusRemoteSelector {
+	var prs []Remote
+	for _, remote := range remotes {
+		if remote.HasPower(PreprocessorPower) {
+			prs = append(prs, remote)
+		}
+	}
 	return &StatusRemoteSelector{
-		LabelLogger: common.NewLabelLogger("StatusRemoteSelector", logger),
-		remotes:     remotes,
+		LabelLogger:         common.NewLabelLogger("StatusRemoteSelector", logger),
+		remotes:             remotes,
+		preprocessorRemotes: prs,
 	}
 }
 
@@ -33,10 +42,10 @@ type remoteScore struct {
 	remote Remote
 }
 
-func (s *StatusRemoteSelector) bestRemote(remoteScores map[string]remoteScore) (res Remote) {
+func (s *StatusRemoteSelector) bestRemote(remoteScores []remoteScore) (res Remote) {
 	bestScore := -1
 	for _, rs := range remoteScores {
-		if rs.score > bestScore {
+		if bestScore < 0 || rs.score < bestScore {
 			res = rs.remote
 			bestScore = rs.score
 		}
@@ -44,29 +53,41 @@ func (s *StatusRemoteSelector) bestRemote(remoteScores map[string]remoteScore) (
 	return res
 }
 
-func (s *StatusRemoteSelector) GetRemote() (res Remote, err error) {
-	var queueSizesMu sync.Mutex
-	queueSizes := make(map[string]remoteScore)
+func (s *StatusRemoteSelector) getBestRemote(remotes []Remote) (res Remote, err error) {
+	if len(remotes) == 0 {
+		return res, errors.New("no remotes available")
+	}
+	var scoresMu sync.Mutex
+	scores := make([]remoteScore, len(remotes))
 	var eg errgroup.Group
-	for _, lremote := range s.remotes {
+	for lindex, lremote := range remotes {
 		remote := lremote
+		index := lindex
 		eg.Go(func() error {
 			status, err := s.getRemoteStatus(remote)
 			if err != nil {
 				s.Debug("GetRemote: failed to get status: %s", err)
 				return err
 			}
-			queueSizesMu.Lock()
-			queueSizes[remote.Address] = remoteScore{
+			scoresMu.Lock()
+			scores[index] = remoteScore{
 				score:  len(status.QueuedJobs),
 				remote: remote,
 			}
-			queueSizesMu.Unlock()
+			scoresMu.Unlock()
 			return nil
 		})
 	}
 	if err := eg.Wait(); err != nil {
 		return res, err
 	}
-	return s.bestRemote(queueSizes), nil
+	return s.bestRemote(scores), nil
+}
+
+func (s *StatusRemoteSelector) GetRemote() (res Remote, err error) {
+	return s.getBestRemote(s.remotes)
+}
+
+func (s *StatusRemoteSelector) GetRemoteWithPreprocessor() (res Remote, err error) {
+	return s.getBestRemote(s.preprocessorRemotes)
 }

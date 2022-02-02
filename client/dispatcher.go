@@ -3,21 +3,15 @@ package client
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"time"
 
-	"github.com/pkg/errors"
 	"mmaxim.org/xcdistcc/common"
 )
 
-type Remote struct {
-	Address      string
-	PublicKeyStr string
-}
-
 type RemoteSelector interface {
 	GetRemote() (Remote, error)
+	GetRemoteWithPreprocessor() (Remote, error)
 }
 
 type Preprocessor interface {
@@ -46,16 +40,6 @@ func (d *Dispatcher) getConn() (*RemoteConn, error) {
 	return DialRemote(remote)
 }
 
-func (d *Dispatcher) writeFile(fullpath string, dat []byte) error {
-	if err := os.MkdirAll(filepath.Dir(fullpath), 0644); err != nil {
-		return errors.Wrap(err, "failed to make directory")
-	}
-	if err := os.WriteFile(fullpath, dat, 0644); err != nil {
-		return errors.Wrap(err, "failed to write file")
-	}
-	return nil
-}
-
 func (d *Dispatcher) Run(cmdstr string) error {
 	xccmd := common.NewXcodeCmd(cmdstr)
 	xccmd.SetArch(runtime.GOARCH)
@@ -66,7 +50,7 @@ func (d *Dispatcher) Run(cmdstr string) error {
 		return err
 	}
 	startTime := time.Now()
-	stageTime := time.Now()
+	stageTime := startTime
 	preprocessed, precmd, includeData, err := d.preprocessor.Preprocess(xccmd)
 	if err != nil {
 		d.Debug("failed to preprocess: %s", err)
@@ -99,12 +83,12 @@ func (d *Dispatcher) Run(cmdstr string) error {
 	// write dep file if one was specified
 	depPath, err := xccmd.GetDepFilepath()
 	if err == nil {
-		if err := d.writeFile(depPath, cmdresp.Dep); err != nil {
+		if err := common.WriteFileCreatePath(depPath, cmdresp.Dep); err != nil {
 			d.Debug("failed to write dep file: %s", err)
 			return err
 		}
 	}
-	if err := d.writeFile(outputPath, cmdresp.Object); err != nil {
+	if err := common.WriteFileCreatePath(outputPath, cmdresp.Object); err != nil {
 		d.Debug("failed to write output file: %s", err)
 		return err
 	}

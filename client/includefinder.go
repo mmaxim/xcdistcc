@@ -164,6 +164,6 @@ func (f *IncludeFinder) Preprocess(cmd *common.XcodeCmd) (code []byte, retcmd *c
 		res = append(res, id)
 		f.Debug("include: %s", id.Path)
 	}
-	retcmd.AddIncludeDir(filepath.Dir(inputPath))
+	retcmd.PushIncludeDirBack(filepath.Dir(inputPath))
 	return code, retcmd, res, nil
 }

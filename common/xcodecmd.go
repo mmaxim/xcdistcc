@@ -188,6 +188,27 @@ func (c *XcodeCmd) LocalizeIncludeDirs(basedir string) {
 	})
 }
 
-func (c *XcodeCmd) AddIncludeDir(path string) {
+func (c *XcodeCmd) PushIncludeDirBack(path string) {
 	c.addSwitchWithArg("-I", path)
+}
+
+func (c *XcodeCmd) PushIncludeDirFront(path string) {
+	added := false
+	c.walkIncludeDirs(func(includeTyp string, tokIndex, numToks int) {
+		if added {
+			return
+		}
+		if tokIndex == 0 {
+			c.toks = append([]string{path}, c.toks...)
+		} else if tokIndex == len(c.toks)-1 {
+			c.addSwitchWithArg("-I", path)
+		} else {
+			c.toks = append(c.toks[:tokIndex+1], c.toks[tokIndex:]...)
+			c.toks[tokIndex] = "-I" + path
+		}
+		added = true
+	})
+	if !added {
+		c.addSwitchWithArg("-I", path)
+	}
 }

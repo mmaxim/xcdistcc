@@ -1,6 +1,7 @@
 package client
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -8,20 +9,39 @@ import (
 	"mmaxim.org/xcdistcc/common"
 )
 
-type RandConnSelector struct {
-	hosts []string
+type RandRemoteSelector struct {
+	remotes             []Remote
+	preprocessorRemotes []Remote
 }
 
-func NewRandConnSelector(hosts []string) *RandConnSelector {
-	return &RandConnSelector{
-		hosts: hosts,
+func NewRandConnSelector(remotes []Remote) *RandRemoteSelector {
+	var prs []Remote
+	for _, remote := range remotes {
+		if remote.HasPower(PreprocessorPower) {
+			prs = append(prs, remote)
+		}
+	}
+	return &RandRemoteSelector{
+		remotes:             remotes,
+		preprocessorRemotes: prs,
 	}
 }
 
-func (c *RandConnSelector) GetConn() (string, error) {
-	host := c.hosts[rand.Intn(len(c.hosts))]
-	if !strings.Contains(host, ":") {
-		host = fmt.Sprintf("%s:%d", host, common.DefaultListenPort)
+func (c *RandRemoteSelector) getRandRemote(remotes []Remote) (res Remote, err error) {
+	if len(remotes) == 0 {
+		return res, errors.New("no remotes available")
 	}
-	return host, nil
+	remote := remotes[rand.Intn(len(remotes))]
+	if !strings.Contains(remote.Address, ":") {
+		remote.Address = fmt.Sprintf("%s:%d", remote.Address, common.DefaultListenPort)
+	}
+	return remote, nil
+}
+
+func (c *RandRemoteSelector) GetRemote() (Remote, error) {
+	return c.getRandRemote(c.remotes)
+}
+
+func (c *RandRemoteSelector) GetRemoteWithPreprocessor() (Remote, error) {
+	return c.getRandRemote(c.preprocessorRemotes)
 }

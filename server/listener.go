@@ -111,6 +111,14 @@ func (r *Listener) handleCommand(cmd common.Cmd, conn net.Conn, secret *common.S
 		}
 		payload, err := r.runner.Compile(compile, "")
 		return r.sendResponse(payload, err, conn, secret)
+	case common.MethodPreprocess:
+		var preprocess common.PreprocessCmd
+		if err := msgpack.Unmarshal(cmd.Args, &preprocess); err != nil {
+			r.Debug("handleCommand: failed to parse preprocess args: %s", err)
+			return err
+		}
+		payload, err := r.runner.Preprocess(preprocess, "")
+		return r.sendResponse(payload, err, conn, secret)
 	case common.MethodStatus:
 		return r.sendResponse(r.runner.Status(), nil, conn, secret)
 	default:

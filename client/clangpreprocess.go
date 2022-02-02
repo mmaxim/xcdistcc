@@ -9,6 +9,7 @@ import (
 
 type ClangPreprocessor struct {
 	*common.LabelLogger
+	dir string
 }
 
 func NewClangPreprocessor(logger common.Logger) *ClangPreprocessor {
@@ -25,12 +26,20 @@ func (c *ClangPreprocessor) Preprocess(basecmd *common.XcodeCmd) ([]byte, *commo
 	precmd.RemoveOutputFilepath()
 
 	cmd := exec.Command(common.DefaultCXX, precmd.GetTokens()...)
+	if len(c.dir) > 0 {
+		cmd.Dir = c.dir
+	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		c.Debug("preprocess failed: %s", string(out[:]))
+		c.Debug("done")
 		return nil, nil, nil, errors.Wrap(err, "preprocess failed")
 	}
 	retcmd.RemoveDepFilepath()
 	return out, retcmd, nil, nil
 
+}
+
+func (c *ClangPreprocessor) SetDirectory(dir string) {
+	c.dir = dir
 }

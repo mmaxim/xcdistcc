@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"mmaxim.org/xcdistcc/client"
 	"mmaxim.org/xcdistcc/common"
 )
 
@@ -35,22 +36,17 @@ func (e compileError) Error() string {
 type Builder struct {
 	*common.LabelLogger
 
-	code     []byte
-	cmd      *common.XcodeCmd
-	includes []common.IncludeData
+	preprocessor *client.ClangPreprocessor
 }
 
-func NewBuilder(code []byte, cmd *common.XcodeCmd, includes []common.IncludeData,
-	logger common.Logger) *Builder {
+func NewBuilder(logger common.Logger) *Builder {
 	return &Builder{
-		LabelLogger: common.NewLabelLogger("Builder", logger),
-		code:        code,
-		cmd:         cmd,
-		includes:    includes,
+		LabelLogger:  common.NewLabelLogger("Builder", logger),
+		preprocessor: client.NewClangPreprocessor(logger),
 	}
 }
 
-func (b *Builder) Run() (res common.CompileResponse, err error) {
+func (b *Builder) Compile(code []byte, cmd *common.XcodeCmd, includes []common.IncludeData) (res common.CompileResponse, err error) {
 	owndir, err := common.RandString("xc", 9)
 	if err != nil {
 		return res, errors.Wrap(err, "failed to generate build dir name")
@@ -61,21 +57,21 @@ func (b *Builder) Run() (res common.CompileResponse, err error) {
 		return res, errors.Wrap(err, "failed to make temp dir")
 	}
 	defer os.RemoveAll(dir)
-	ccmd := b.cmd.Clone()
+	ccmd := cmd.Clone()
 
 	// write out temp input file with same name
-	origInputPath, err := b.cmd.GetInputFilepath()
+	origInputPath, err := cmd.GetInputFilepath()
 	if err != nil {
 		return res, err
 	}
 	inputFilepath := filepath.Join(dir, filepath.Base(origInputPath))
-	if err := os.WriteFile(inputFilepath, b.code, 0644); err != nil {
+	if err := os.WriteFile(inputFilepath, code, 0644); err != nil {
 		return res, errors.Wrap(err, "failed to write input file")
 	}
 	ccmd.RemoveInputFilepath()
 	ccmd.SetInputFilepath(inputFilepath)
 
-	origOutputPath, err := b.cmd.GetOutputFilepath()
+	origOutputPath, err := cmd.GetOutputFilepath()
 	if err != nil {
 		return res, err
 	}
@@ -84,7 +80,7 @@ func (b *Builder) Run() (res common.CompileResponse, err error) {
 	ccmd.SetOutputFilepath(outputFilepath)
 
 	var depFilepath string
-	origDepPath, err := b.cmd.GetDepFilepath()
+	origDepPath, err := cmd.GetDepFilepath()
 	if err == nil {
 		depFilepath = filepath.Join(dir, filepath.Base(origDepPath))
 		ccmd.RemoveDepFilepath()
@@ -93,8 +89,8 @@ func (b *Builder) Run() (res common.CompileResponse, err error) {
 
 	// if we have include data, create the localized version of it in the temp dir, and change the
 	// compile commands be rooted in it
-	if len(b.includes) != 0 {
-		for _, include := range b.includes {
+	if len(includes) != 0 {
+		for _, include := range includes {
 			dest := dir + include.Path
 			if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
 				b.Debug("failed to make include dirs: dest: %s err: %s", dest, err)
@@ -135,5 +131,29 @@ func (b *Builder) Run() (res common.CompileResponse, err error) {
 	}
 	res.Output = string(out)
 	res.Object = object
+	return res, nil
+}
+
+func (b *Builder) Preprocess(dir string, cmd *common.XcodeCmd) (res common.PreprocessResponse, err error) {
+	b.preprocessor.SetDirectory(dir)
+	out, _, _, err := b.preprocessor.Preprocess(cmd)
+	if err != nil {
+		return res, err
+	}
+	res.Code = out
+	depFilepath, err := cmd.GetDepFilepath()
+	if err == nil {
+		var absDepFilepath string
+		if filepath.IsAbs(depFilepath) {
+			absDepFilepath = depFilepath
+		} else {
+			absDepFilepath = dir + string(filepath.Separator) + depFilepath
+		}
+		dep, err := os.ReadFile(absDepFilepath)
+		if err != nil {
+			return res, errors.Wrap(err, "failed to read dep file")
+		}
+		res.Dep = dep
+	}
 	return res, nil
 }

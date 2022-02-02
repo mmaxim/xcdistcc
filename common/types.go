@@ -27,6 +27,19 @@ type CompileResponse struct {
 	Dep    []byte
 }
 
+const MethodPreprocess = "preprocess"
+
+type PreprocessCmd struct {
+	Dir     string
+	Command string
+}
+
+type PreprocessResponse struct {
+	Output string
+	Code   []byte
+	Dep    []byte
+}
+
 const MethodStatus = "status"
 
 type StatusCmd struct{}
@@ -35,6 +48,7 @@ type StatusJob struct {
 	SourceAddress string
 	Filename      string
 	Command       string
+	Mode          string
 }
 
 type StatusResponse struct {

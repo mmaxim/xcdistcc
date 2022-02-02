@@ -4,7 +4,11 @@ import (
 	"crypto/rand"
 	"encoding/base32"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 var NewLineBytes = []byte("\n")
@@ -47,4 +51,14 @@ func RandString(prefix string, numbytes int) (string, error) {
 		str = strings.Join([]string{prefix, str}, "")
 	}
 	return str, nil
+}
+
+func WriteFileCreatePath(fullpath string, dat []byte) error {
+	if err := os.MkdirAll(filepath.Dir(fullpath), 0644); err != nil {
+		return errors.Wrap(err, "failed to make directory")
+	}
+	if err := os.WriteFile(fullpath, dat, 0644); err != nil {
+		return errors.Wrap(err, "failed to write file")
+	}
+	return nil
 }
