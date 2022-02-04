@@ -6,11 +6,8 @@ import (
 	"mmaxim.org/xcdistcc/common"
 )
 
-type jobID uint64
-
 type runnerJob interface {
 	toStatusJob() common.StatusJob
-	ID() jobID
 }
 
 type compileJobRes struct {
@@ -19,7 +16,6 @@ type compileJobRes struct {
 }
 
 type compileJob struct {
-	id         jobID
 	cmd        *common.XcodeCmd
 	code       []byte
 	includes   []common.IncludeData
@@ -27,19 +23,14 @@ type compileJob struct {
 	doneCh     chan compileJobRes
 }
 
-func newCompileJob(id jobID, cmd common.CompileCmd, sourceAddr string) *compileJob {
+func newCompileJob(cmd common.CompileCmd, sourceAddr string) *compileJob {
 	return &compileJob{
-		id:         id,
 		cmd:        common.NewXcodeCmd(cmd.Command),
 		code:       cmd.Code,
 		includes:   cmd.Includes,
 		sourceAddr: sourceAddr,
 		doneCh:     make(chan compileJobRes),
 	}
-}
-
-func (j *compileJob) ID() jobID {
-	return j.id
 }
 
 func (j *compileJob) toStatusJob() common.StatusJob {
@@ -61,25 +52,19 @@ type preprocessJobRes struct {
 }
 
 type preprocessJob struct {
-	id         jobID
 	dir        string
 	cmd        *common.XcodeCmd
 	sourceAddr string
 	doneCh     chan preprocessJobRes
 }
 
-func newPreprocessJob(id jobID, cmd common.PreprocessCmd, sourceAddr string) *preprocessJob {
+func newPreprocessJob(cmd common.PreprocessCmd, sourceAddr string) *preprocessJob {
 	return &preprocessJob{
-		id:         id,
 		dir:        cmd.Dir,
 		cmd:        common.NewXcodeCmd(cmd.Command),
 		sourceAddr: sourceAddr,
 		doneCh:     make(chan preprocessJobRes),
 	}
-}
-
-func (j *preprocessJob) ID() jobID {
-	return j.id
 }
 
 func (j *preprocessJob) toStatusJob() common.StatusJob {
@@ -97,20 +82,21 @@ func (j *preprocessJob) toStatusJob() common.StatusJob {
 
 type Runner struct {
 	*common.LabelLogger
-	queue   *jobQueue[runnerJob]
-	builder *Builder
+	queue      *jobQueue[runnerJob]
+	builder    *Builder
+	numWorkers int
 
-	activeJobsMu sync.Mutex
-	nextJobID    jobID
-	activeJobs   map[jobID]runnerJob
+	workerStatusMu sync.Mutex
+	workerStatus   map[int]runnerJob
 }
 
 func NewRunner(numWorkers, maxQueueSize int, logger common.Logger) *Runner {
 	r := &Runner{
-		LabelLogger: common.NewLabelLogger("Runner", logger),
-		queue:       newJobQueue[runnerJob](maxQueueSize),
-		builder:     NewBuilder(logger),
-		activeJobs:  make(map[jobID]runnerJob),
+		LabelLogger:  common.NewLabelLogger("Runner", logger),
+		queue:        newJobQueue[runnerJob](maxQueueSize),
+		builder:      NewBuilder(logger),
+		workerStatus: make(map[int]runnerJob),
+		numWorkers:   numWorkers,
 	}
 	r.Debug("spawning %d workers", numWorkers)
 	for i := 0; i < numWorkers; i++ {
@@ -164,6 +150,7 @@ func (r *Runner) workerLoop(id int) {
 			}
 			continue
 		}
+		r.startCompileJob(id, job)
 		switch sjob := job.(type) {
 		case *compileJob:
 			r.runCompileJob(sjob)
@@ -172,26 +159,24 @@ func (r *Runner) workerLoop(id int) {
 		default:
 			r.Debug("unknown job type")
 		}
-
-		r.finishCompileJob(job)
+		r.finishCompileJob(id)
 	}
 }
 
-func (r *Runner) getJobID() jobID {
-	r.activeJobsMu.Lock()
-	defer r.activeJobsMu.Unlock()
-	r.nextJobID += 1
-	return r.nextJobID
+func (r *Runner) startCompileJob(workerID int, job runnerJob) {
+	r.workerStatusMu.Lock()
+	defer r.workerStatusMu.Unlock()
+	r.workerStatus[workerID] = job
 }
 
-func (r *Runner) finishCompileJob(job runnerJob) {
-	r.activeJobsMu.Lock()
-	defer r.activeJobsMu.Unlock()
-	delete(r.activeJobs, job.ID())
+func (r *Runner) finishCompileJob(workerID int) {
+	r.workerStatusMu.Lock()
+	defer r.workerStatusMu.Unlock()
+	delete(r.workerStatus, workerID)
 }
 
 func (r *Runner) Compile(cmd common.CompileCmd, sourceAddr string) (res common.CompileResponse, err error) {
-	job := newCompileJob(r.getJobID(), cmd, sourceAddr)
+	job := newCompileJob(cmd, sourceAddr)
 	if err := r.queue.push(job); err != nil {
 		return res, err
 	}
@@ -200,7 +185,7 @@ func (r *Runner) Compile(cmd common.CompileCmd, sourceAddr string) (res common.C
 }
 
 func (r *Runner) Preprocess(cmd common.PreprocessCmd, sourceAddr string) (res common.PreprocessResponse, err error) {
-	job := newPreprocessJob(r.getJobID(), cmd, sourceAddr)
+	job := newPreprocessJob(cmd, sourceAddr)
 	if err := r.queue.push(job); err != nil {
 		return res, err
 	}
@@ -209,14 +194,22 @@ func (r *Runner) Preprocess(cmd common.PreprocessCmd, sourceAddr string) (res co
 }
 
 func (r *Runner) Status() (res common.StatusResponse) {
-	r.activeJobsMu.Lock()
-	defer r.activeJobsMu.Unlock()
-	for _, job := range r.activeJobs {
-		res.ActiveJobs = append(res.ActiveJobs, job.toStatusJob())
+	r.workerStatusMu.Lock()
+	defer r.workerStatusMu.Unlock()
+	for i := 0; i < r.numWorkers; i++ {
+		status := common.StatusWorker{
+			ID: i,
+		}
+		if job, ok := r.workerStatus[i]; ok {
+			status.Job = new(common.StatusJob)
+			*status.Job = job.toStatusJob()
+		}
+		res.WorkerStatus = append(res.WorkerStatus, status)
 	}
 	jobs := r.queue.listJobs()
 	for _, job := range jobs {
 		res.QueuedJobs = append(res.QueuedJobs, job.toStatusJob())
 	}
+	res.NumWorkers = r.numWorkers
 	return res
 }

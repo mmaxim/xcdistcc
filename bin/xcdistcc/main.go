@@ -3,26 +3,13 @@ package main
 import (
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"mmaxim.org/xcdistcc/client"
 )
 
 func main() {
-	var path string
-	envStr := os.Getenv("XCDISTCC_CONFIGFILE")
-	if len(envStr) != 0 {
-		path = envStr
-	} else {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			log.Printf("failed to get user home directory: %s", err)
-			os.Exit(3)
-		}
-		path = filepath.Join(filepath.Join(homeDir, ".xcdistcc"), "config.json")
-	}
-	config, err := LoadConfig(path)
+	config, err := LoadConfig()
 	if err != nil {
 		log.Printf("failed to load config: %s", err)
 		os.Exit(3)

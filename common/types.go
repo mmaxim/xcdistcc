@@ -51,9 +51,15 @@ type StatusJob struct {
 	Mode          string
 }
 
+type StatusWorker struct {
+	ID  int
+	Job *StatusJob
+}
+
 type StatusResponse struct {
-	ActiveJobs []StatusJob
-	QueuedJobs []StatusJob
+	WorkerStatus []StatusWorker
+	QueuedJobs   []StatusJob
+	NumWorkers   int
 }
 
 type IncludeData struct {

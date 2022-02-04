@@ -1,48 +1,13 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"os"
-	"strings"
 
 	"github.com/pkg/errors"
+	"mmaxim.org/xcdistcc/bin"
 	"mmaxim.org/xcdistcc/client"
 	"mmaxim.org/xcdistcc/common"
 )
-
-type ConfigRemote struct {
-	Address   string
-	PublicKey string
-	Powers    []string
-}
-
-func (r ConfigRemote) ToRemote() (res client.Remote, err error) {
-	res.Address = r.Address
-	if len(r.PublicKey) > 0 {
-		res.PublicKey = new(common.PublicKey)
-		if *res.PublicKey, err = common.NewPublicKeyFromString(r.PublicKey); err != nil {
-			return res, err
-		}
-	}
-	if len(r.Powers) > 0 {
-		for _, power := range r.Powers {
-			switch power {
-			case "preprocess":
-				res.Powers = append(res.Powers, client.PreprocessorPower)
-			case "compile":
-				res.Powers = append(res.Powers, client.CompilePower)
-			}
-		}
-	} else {
-		res.Powers = []client.Power{client.CompilePower}
-	}
-	return res, nil
-}
-
-type ConfigFile struct {
-	Remotes []ConfigRemote
-}
 
 type Config struct {
 	Remotes        []client.Remote
@@ -51,23 +16,15 @@ type Config struct {
 	Preprocessor   client.Preprocessor
 }
 
-func LoadConfig(path string) (config *Config, err error) {
+func LoadConfig() (config *Config, err error) {
 	config = new(Config)
-	dat, err := os.ReadFile(path)
+	configFile, err := bin.LoadConfigFile()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to read config file")
-	}
-	var configFile ConfigFile
-	if err := json.Unmarshal(dat, &configFile); err != nil {
-		return nil, errors.Wrap(err, "failed to parse config")
+		return nil, err
 	}
 
 	config.Remotes = make([]client.Remote, len(configFile.Remotes))
 	for index, remote := range configFile.Remotes {
-		// add default port to remotes missing it
-		if !strings.Contains(remote.Address, ":") {
-			remote.Address = fmt.Sprintf("%s:%d", remote.Address, common.DefaultListenPort)
-		}
 		if config.Remotes[index], err = remote.ToRemote(); err != nil {
 			return nil, errors.Wrap(err, "invalid remote")
 		}
