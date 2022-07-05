@@ -45,7 +45,7 @@ type remoteScore struct {
 func (s *StatusRemoteSelector) bestRemote(remoteScores []remoteScore) (res Remote) {
 	bestScore := -1
 	for _, rs := range remoteScores {
-		if bestScore < 0 || rs.score < bestScore {
+		if bestScore < 0 || (rs.score >= 0 && rs.score < bestScore) {
 			res = rs.remote
 			bestScore = rs.score
 		}
@@ -65,13 +65,15 @@ func (s *StatusRemoteSelector) getBestRemote(remotes []Remote) (res Remote, err 
 		index := lindex
 		eg.Go(func() error {
 			status, err := s.getRemoteStatus(remote)
+			score := -1
 			if err != nil {
 				s.Debug("GetRemote: failed to get status: %s", err)
-				return err
+			} else {
+				score = len(status.QueuedJobs)
 			}
 			scoresMu.Lock()
 			scores[index] = remoteScore{
-				score:  len(status.QueuedJobs),
+				score:  score,
 				remote: remote,
 			}
 			scoresMu.Unlock()

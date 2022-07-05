@@ -46,7 +46,7 @@ func (r *Refresher) GetStatuses() (res []string, err error) {
 	for _, remote := range r.remotes {
 		jobStrs, err := r.getStatus(remote)
 		if err != nil {
-			return res, err
+			continue
 		}
 		res = append(res, jobStrs...)
 	}

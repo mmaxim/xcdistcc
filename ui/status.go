@@ -27,7 +27,7 @@ func NewMainWindow(a fyne.App, remotes []client.Remote) fyne.Window {
 				w.SetContent(padded)
 				w.Resize(fyne.NewSize(600.0, 400.0))
 			}
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
 		}
 	}()
 
