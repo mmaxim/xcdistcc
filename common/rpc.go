@@ -140,7 +140,7 @@ func DoRPC[ReqTyp any, PayloadTyp any](conn net.Conn, method string, req ReqTyp,
 	case resp = <-respCh:
 	case err := <-errCh:
 		return res, err
-	case <-time.After(time.Minute):
+	case <-time.After(10 * time.Minute):
 		return res, errors.New("timed out waiting for response")
 	}
 
